@@ -14,12 +14,8 @@ class Config:
     SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
     SLACK_APP_TOKEN = os.getenv("SLACK_APP_TOKEN")
 
-    # Gemini Configuration
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-
-    # Google ADK Configuration (uses GOOGLE_GENAI_API_KEY)
-    # Falls back to GEMINI_API_KEY for compatibility
+    # Google Generative AI API Key (for ADK Agent)
+    # Primary key is GOOGLE_GENAI_API_KEY, falls back to GEMINI_API_KEY for backward compatibility
     GOOGLE_GENAI_API_KEY = os.getenv("GOOGLE_GENAI_API_KEY") or os.getenv("GEMINI_API_KEY")
 
     # Bot Configuration
