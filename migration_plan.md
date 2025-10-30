@@ -19,19 +19,19 @@
 ## Phase 1: ADKAgent 클래스 생성 (TDD Cycle 1)
 
 ### Test 1.1: ADKAgent 초기화 테스트 (RED)
-- [ ] `tests/test_adk_agent.py` 파일 생성
-- [ ] 테스트 작성: `test_adk_agent_initializes_with_api_key`
-- [ ] 테스트 실행 → 실패 확인 (RED)
+- [x] `tests/test_adk_agent.py` 파일 생성
+- [x] 테스트 작성: `test_adk_agent_initializes_with_api_key`
+- [x] 테스트 실행 → 실패 확인 (RED)
 
 ### Implementation 1.1: ADKAgent 기본 구조 (GREEN)
-- [ ] `src/llm/adk_agent.py` 파일 생성
-- [ ] ADKAgent 클래스 구현 (최소한의 코드)
-- [ ] 테스트 실행 → 통과 확인 (GREEN)
+- [x] `src/llm/adk_agent.py` 파일 생성
+- [x] ADKAgent 클래스 구현 (최소한의 코드)
+- [x] 테스트 실행 → 통과 확인 (GREEN)
 
 ### Refactor 1.1: 코드 정리 (REFACTOR)
-- [ ] 타입 힌트 추가
-- [ ] Docstring 추가
-- [ ] 테스트 재실행 → 통과 확인
+- [x] 타입 힌트 추가
+- [x] Docstring 추가
+- [x] 테스트 재실행 → 통과 확인
 
 **커밋**: `feat: Implement ADKAgent initialization with API key`
 
