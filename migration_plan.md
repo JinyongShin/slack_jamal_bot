@@ -62,18 +62,23 @@
 ## Phase 3: MessageProcessor 통합 (TDD Cycle 3)
 
 ### Test 3.1: MessageProcessor가 ADKAgent 사용하는 테스트 (RED)
-- [ ] `tests/test_message_processor.py` 수정
-- [ ] 테스트 작성: `test_message_processor_uses_adk_agent`
-- [ ] 테스트 실행 → 실패 확인 (RED)
+- [x] `tests/test_message_processor.py` 수정
+- [x] 테스트 작성: `test_message_processor_uses_adk_agent`
+- [x] 테스트 작성: `test_message_processor_with_adk_agent_ignores_tools`
+- [x] 테스트 실행 → 실패 확인 (RED)
 
 ### Implementation 3.1: MessageProcessor 수정 (GREEN)
-- [ ] `src/bot/message_processor.py` 수정
-- [ ] GeminiClient → ADKAgent로 교체
-- [ ] 테스트 실행 → 통과 확인 (GREEN)
+- [x] Context7에서 ADK google_search tool 문서 확인
+- [x] ADKAgent에 `google_search` tool 추가
+- [x] `src/bot/message_processor.py` 수정
+- [x] ADKAgent는 tools를 내부적으로 관리하도록 로직 분리
+- [x] 테스트 실행 → 통과 확인 (GREEN)
 
 ### Refactor 3.1: 인터페이스 정리 (REFACTOR)
-- [ ] 기존 메서드 시그니처 유지 확인
-- [ ] 테스트 재실행 → 통과 확인
+- [x] `_is_adk_agent()` 헬퍼 메서드 추가
+- [x] `_generate_response()` 메서드 추출하여 코드 가독성 개선
+- [x] 기존 메서드 시그니처 유지 확인
+- [x] 테스트 재실행 → 통과 확인 (39 passed, 3 skipped)
 
 **커밋**: `feat: Integrate ADKAgent into MessageProcessor`
 
@@ -193,6 +198,6 @@
 ---
 
 ## 진행 상황
-- **현재 Phase**: 0
-- **완료된 테스트**: 0
-- **다음 작업**: Phase 0 - pyproject.toml 수정
+- **현재 Phase**: 3 (완료)
+- **완료된 테스트**: 11/11 MessageProcessor 테스트 통과
+- **다음 작업**: Phase 4 - Slack 통합 테스트
