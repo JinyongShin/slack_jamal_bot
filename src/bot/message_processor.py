@@ -38,19 +38,33 @@ class MessageProcessor:
         """
         return self.llm_client.__class__.__name__ == 'ADKAgent'
 
-    def _generate_response(self, text: str) -> str:
+    def _generate_response(
+        self,
+        text: str,
+        channel: str = None,
+        thread_ts: str = None,
+        user: str = None
+    ) -> str:
         """
         Generate response using the appropriate method based on client type.
 
         Args:
             text: Cleaned message text
+            channel: Slack channel ID (optional, for session management)
+            thread_ts: Slack thread timestamp (optional, for session management)
+            user: Slack user ID (optional, for session management)
 
         Returns:
             Generated response text
         """
-        # ADKAgent handles tools internally, always use generate_response
+        # ADKAgent handles tools internally and supports session management
         if self._is_adk_agent():
-            return self.llm_client.generate_response(text)
+            return self.llm_client.generate_response(
+                text=text,
+                channel=channel,
+                thread_ts=thread_ts,
+                user=user
+            )
 
         # Legacy clients may have separate tool handling
         if self.tool_handlers and hasattr(self.llm_client, 'generate_response_with_tools'):
@@ -79,10 +93,15 @@ class MessageProcessor:
             # Clean up message text (remove bot mention)
             cleaned_text = self._clean_message_text(text)
 
-            logger.info(f"Processing message from user {user}: {cleaned_text}")
+            logger.info(f"Processing message from user {user} in channel {channel}, thread {thread_ts}: {cleaned_text}")
 
-            # Generate response based on client type
-            response = self._generate_response(cleaned_text)
+            # Generate response based on client type, passing session info for ADKAgent
+            response = self._generate_response(
+                text=cleaned_text,
+                channel=channel,
+                thread_ts=thread_ts,
+                user=user
+            )
 
             return response
 

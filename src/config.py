@@ -21,6 +21,9 @@ class Config:
     # Bot Configuration
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
+    # Session Management
+    SESSION_TTL_HOURS = int(os.getenv("SESSION_TTL_HOURS", "24"))
+
     @classmethod
     def validate(cls) -> bool:
         """

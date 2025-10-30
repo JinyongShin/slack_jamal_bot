@@ -150,8 +150,13 @@ def test_message_processor_uses_adk_agent():
                 thread_ts="1234.5678"
             )
 
-            # Verify ADKAgent was called with cleaned text
-            adk_agent.generate_response.assert_called_once_with("Test message")
+            # Verify ADKAgent was called with cleaned text and session info
+            adk_agent.generate_response.assert_called_once_with(
+                text="Test message",
+                channel="C11111",
+                thread_ts="1234.5678",
+                user="U67890"
+            )
             assert response == "ADK response"
 
 
@@ -175,5 +180,10 @@ def test_message_processor_with_adk_agent_ignores_tools():
         )
 
         # ADKAgent should use generate_response, not generate_response_with_tools
-        adk_agent.generate_response.assert_called_once_with("Test message with tools")
+        adk_agent.generate_response.assert_called_once_with(
+            text="Test message with tools",
+            channel="C11111",
+            thread_ts="1234.5678",
+            user="U67890"
+        )
         assert response == "ADK response"

@@ -10,7 +10,11 @@ Google Agent Development Kit (ADK)를 활용한 지능형 Slack 챗봇입니다.
   - Google Search 도구 내장 (최신 정보 자동 검색)
   - 날씨, 뉴스, 일반 정보 등 모든 검색 가능
 - **건방진 개성**: 오만하고 건방진 AgentJamal의 독특한 말투
-- **스레드 대화**: 스레드 내에서 맥락 유지
+- **스레드 대화 맥락 유지**:
+  - 동일 스레드 내에서 이전 대화 기억
+  - Google ADK 세션 관리를 통한 연속적인 대화
+  - 스레드별 독립적인 대화 컨텍스트
+  - 자동 세션 만료 (기본 24시간)
 
 ## 프로젝트 구조
 
@@ -85,6 +89,9 @@ SLACK_BOT_TOKEN=xoxb-your-bot-token-here
 SLACK_APP_TOKEN=xapp-your-app-token-here
 GOOGLE_GENAI_API_KEY=your-google-genai-api-key-here
 LOG_LEVEL=INFO
+
+# Session Management (Optional)
+SESSION_TTL_HOURS=24  # 대화 맥락 유지 시간 (기본: 24시간)
 ```
 
 ## 실행 방법
@@ -115,7 +122,19 @@ Slack에서 봇을 멘션하여 사용:
 @AgentJamal 최신 AI 뉴스 알려줘
 ```
 
-**특징**: AgentJamal은 Google Search를 자동으로 사용하여 최신 정보를 제공합니다!
+**특징:**
+- AgentJamal은 Google Search를 자동으로 사용하여 최신 정보를 제공합니다!
+- 동일 스레드 내에서는 이전 대화를 기억하여 연속적인 대화가 가능합니다!
+
+**대화 맥락 예시:**
+```
+사용자: @AgentJamal 내 이름은 철수야
+봇: 알았어, 철수! [응답...]
+
+(같은 스레드에서)
+사용자: @AgentJamal 내 이름 뭐였지?
+봇: 철수라고 했잖아! [이전 대화 기억하여 응답]
+```
 
 ## 트러블슈팅
 
