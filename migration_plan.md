@@ -40,18 +40,20 @@
 ## Phase 2: 응답 생성 기능 (TDD Cycle 2)
 
 ### Test 2.1: 텍스트 입력 → 응답 생성 테스트 (RED)
-- [ ] 테스트 작성: `test_generate_response_returns_text`
-- [ ] 테스트 실행 → 실패 확인 (RED)
+- [x] 테스트 작성: `test_generate_response_returns_text`
+- [x] 테스트 실행 → 실패 확인 (RED)
 
 ### Implementation 2.1: generate_response 메서드 (GREEN)
-- [ ] Context7에서 ADK Agent의 query/run 메서드 확인
-- [ ] `ADKAgent.generate_response()` 메서드 구현
-- [ ] 테스트 실행 → 통과 확인 (GREEN)
+- [x] GitHub problem_forge 저장소에서 ADK 사용 패턴 분석
+- [x] ADK samples에서 InMemoryRunner 패턴 확인
+- [x] `ADKAgent.generate_response()` 메서드 구현 (InMemoryRunner 사용)
+- [x] 테스트 실행 → 통과 확인 (GREEN)
 
 ### Refactor 2.1: 에러 처리 추가 (REFACTOR)
-- [ ] 기본적인 try-except 추가
-- [ ] 빈 응답 처리
-- [ ] 테스트 재실행 → 통과 확인
+- [x] 기본적인 try-except 추가
+- [x] 빈 응답 처리
+- [x] 사용하지 않는 import 제거
+- [x] 테스트 재실행 → 통과 확인
 
 **커밋**: `feat: Add generate_response method to ADKAgent`
 

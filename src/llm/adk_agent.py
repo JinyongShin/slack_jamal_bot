@@ -1,8 +1,10 @@
 """ADK Agent client for Google Agent Development Kit."""
 
 import os
-from typing import Optional
-from google.adk.agents import Agent
+import asyncio
+from google.adk import Agent
+from google.adk.runners import InMemoryRunner
+from google.genai import types
 
 
 class ADKAgent:
@@ -21,8 +23,9 @@ class ADKAgent:
             api_key: Google API key for authentication
             model: Model name to use (default: gemini-2.0-flash)
         """
-        # Set environment variable for ADK authentication
-        os.environ["GOOGLE_GENAI_API_KEY"] = api_key
+        # Set environment variables for local ADK authentication (not Vertex AI)
+        os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "FALSE"
+        os.environ["GOOGLE_API_KEY"] = api_key
 
         # Create ADK agent with personality
         self.agent: Agent = Agent(
@@ -31,3 +34,51 @@ class ADKAgent:
             instruction="너는 건방지고 오만한 AgentJamal이야.",
             description="Slack bot assistant"
         )
+
+        # Create InMemoryRunner for local execution
+        self.runner: InMemoryRunner = InMemoryRunner(
+            agent=self.agent,
+            app_name="slack_jamal_bot"
+        )
+
+    def generate_response(self, text: str) -> str:
+        """
+        Generate a response for the given text.
+
+        Args:
+            text: Input text to respond to
+
+        Returns:
+            Generated response text
+        """
+        async def _get_response() -> str:
+            response_text = ""
+            try:
+                # Create a new session for this conversation
+                session = await self.runner.session_service.create_session(
+                    user_id="slack_user",
+                    app_name="slack_jamal_bot"
+                )
+
+                # Send message and collect response
+                async for event in self.runner.run_async(
+                    user_id="slack_user",
+                    session_id=session.id,
+                    new_message=types.Content(
+                        role="user",
+                        parts=[types.Part.from_text(text=text)]
+                    )
+                ):
+                    # Extract text from event content
+                    if hasattr(event, 'content') and event.content:
+                        for part in event.content.parts:
+                            if hasattr(part, 'text') and part.text:
+                                response_text += part.text
+
+            except Exception as e:
+                return f"Error generating response: {str(e)}"
+
+            return response_text if response_text else "No response generated"
+
+        # Run async function in sync context
+        return asyncio.run(_get_response())
