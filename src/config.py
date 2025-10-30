@@ -36,7 +36,7 @@ class Config:
         required_vars = [
             ("SLACK_BOT_TOKEN", cls.SLACK_BOT_TOKEN),
             ("SLACK_APP_TOKEN", cls.SLACK_APP_TOKEN),
-            ("GEMINI_API_KEY", cls.GEMINI_API_KEY),
+            ("GOOGLE_GENAI_API_KEY or GEMINI_API_KEY", cls.GOOGLE_GENAI_API_KEY),
         ]
 
         missing = [name for name, value in required_vars if not value]
