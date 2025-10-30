@@ -113,20 +113,31 @@
 
 ## Phase 5: 로컬 실행 및 검증
 
-### 수동 테스트
-- [ ] 환경 변수 설정: `.env` 파일에 `GOOGLE_GENAI_API_KEY` 추가
+### 자동 검증 (Smoke Test)
+- [x] 환경 변수 설정 확인: `.env` 파일에 `GOOGLE_GENAI_API_KEY` 확인
+- [x] Smoke test 작성: `tests/smoke_test.py`
+- [x] 컴포넌트 초기화 테스트
+  - [x] Config.validate() 통과
+  - [x] ADKAgent 초기화 성공 (google_search tool 포함)
+  - [x] MessageProcessor 초기화 성공
+  - [x] Message cleaning 테스트 통과
+- [x] 모든 smoke test 통과 ✅
+
+### 수동 테스트 (사용자 진행)
 - [ ] `python -m src.main` 실행
 - [ ] Slack에서 봇 멘션
 - [ ] 응답 확인
+- [ ] Google Search 기능 테스트
 - [ ] 에러 로그 확인
 
-### 문제 발생 시
-- [ ] 에러 메시지 기록
-- [ ] Context7에서 ADK 문서 재확인
-- [ ] 테스트 추가 (발견된 버그에 대해)
-- [ ] 수정 후 다시 테스트
+### 결과 문서화
+- [x] `PHASE5_RESULTS.md` 작성
+  - Smoke test 결과
+  - 실행 방법 가이드
+  - 최종 코드베이스 상태
+  - Before/After 비교
 
-**커밋**: `test: Verify Slack integration with ADK agent`
+**커밋**: `test: Add smoke test and Phase 5 verification`
 
 ---
 
@@ -173,7 +184,8 @@
 ---
 
 ## 진행 상황
-- **현재 Phase**: 7 (완료)
+- **현재 Phase**: 5 (완료 - 자동 검증)
 - **완료된 테스트**: 25개 테스트 통과 (21 passed, 4 skipped)
+- **Smoke Test**: ✅ 통과
 - **코드 정리 완료**: 레거시 GeminiClient 및 tools 삭제
-- **다음 작업**: Phase 5 - 로컬 실행 및 검증
+- **다음 작업**: 수동 Slack 테스트 (사용자 진행)
