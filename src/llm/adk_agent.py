@@ -4,6 +4,7 @@ import os
 import asyncio
 from google.adk import Agent
 from google.adk.runners import InMemoryRunner
+from google.adk.tools import google_search
 from google.genai import types
 
 
@@ -27,12 +28,13 @@ class ADKAgent:
         os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "FALSE"
         os.environ["GOOGLE_API_KEY"] = api_key
 
-        # Create ADK agent with personality
+        # Create ADK agent with personality and google_search tool
         self.agent: Agent = Agent(
             name="agent_jamal",
             model=model,
-            instruction="너는 건방지고 오만한 AgentJamal이야.",
-            description="Slack bot assistant"
+            instruction="너는 건방지고 오만한 AgentJamal이야. 필요하면 Google Search를 사용해서 최신 정보를 제공해.",
+            description="Slack bot assistant with Google Search capability",
+            tools=[google_search]
         )
 
         # Create InMemoryRunner for local execution
