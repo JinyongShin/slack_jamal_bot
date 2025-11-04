@@ -129,7 +129,7 @@ cp .env.jamal.sample .env
 
 ## 실행 방법
 
-### Orchestrator Mode (권장)
+### Orchestrator Mode (권장) ✅
 
 하나의 프로세스에서 모든 에이전트 실행:
 
@@ -137,13 +137,20 @@ cp .env.jamal.sample .env
 uv run python -m src.main_debate
 ```
 
-특징:
-- 단일 Slack 앱만 필요
-- 프로그래매틱 토론 흐름 제어
-- 자동 루프 실행 (종료 조건까지)
-- Slack에서 자연스러운 대화 관찰 가능
+**특징:**
+- ✅ **단일 Slack 앱**만 필요 (1개 봇)
+- ✅ 프로그래매틱 토론 흐름 제어
+- ✅ 자동 루프 실행 (종료 조건까지)
+- ✅ Slack에서 자연스러운 대화 관찰 가능
+- ✅ 독립적인 세션 관리 (에이전트별 context 유지)
 
-### 레거시 Mode (3개 독립 앱)
+**실행 전 확인:**
+- `.env` 파일이 있는지 확인
+- `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`, `GOOGLE_GENAI_API_KEY` 설정 필요
+
+### 레거시 Mode (3개 독립 앱) ⚠️
+
+> **참고**: 이 방식은 더 이상 권장하지 않습니다. Orchestrator Mode를 사용하세요.
 
 개별 프로세스로 각 에이전트 실행:
 
@@ -167,15 +174,27 @@ uv run python -m src.main
 ./stop_agents.sh # 종료
 ```
 
+**단점:**
+- ❌ 3개의 독립된 Slack 앱 필요
+- ❌ 3개 프로세스 관리 복잡
+- ❌ 수동으로 토론 진행 필요
+- ❌ Orchestrator 없음
+
 ## 사용 방법
 
 ### 토론 시작 (Orchestrator Mode)
 
-Slack에서 봇을 멘션하여 토론을 시작하세요:
+Slack에서 **봇을 멘션하면 자동으로 토론이 시작**됩니다:
 
 ```
-@Multi-Agent-Debate AI 기술의 미래에 대해 토론해볼까요?
+@봇이름 AI 기술의 미래에 대해 토론해볼까요?
 ```
+
+**중요 사항**:
+- **봇 이름**: Slack 앱 생성 시 사용자가 정한 이름 (예: `@Multi-Agent-Debate`)
+- **봇 개수**: Orchestrator Mode는 **1개의 봇**만 사용
+- **에이전트 역할**: AgentJamal, AgentRyan, AgentJames는 내부 역할명 (Slack에서 보이지 않음)
+- **멘션 형식**: `<@USER_ID>` 형식으로 감지됨 (어떤 멘션 방식도 동작)
 
 토론 자동 진행:
 1. **AgentJamal (Proposer)**: 긍정적 주장 제시
@@ -225,6 +244,20 @@ AgentJames:
 - Slack에서 자연스러운 대화 형태로 관찰 가능
 - AgentJames가 종료 조건 자동 판단
 - 최대 10라운드까지 진행 (설정 변경 가능)
+
+## 최근 수정 사항
+
+### 2025-01-04: 봇 멘션 감지 로직 수정
+- **문제**: 잘못된 조건 (`if "@AgentJamal" in text`)으로 토론이 시작되지 않음
+- **원인**: Slack은 멘션을 `<@USER_ID>` 형식으로 전송 (문자열 `"@AgentJamal"`이 아님)
+- **수정**: 조건 제거하여 모든 봇 멘션에서 토론 시작
+- **영향**: Orchestrator Mode에서 봇 멘션 시 정상적으로 토론 시작
+
+### 2025-01-04: Session 관리 개선
+- **문제**: `session_id` 누락으로 런타임 에러 발생
+- **수정**: `_get_or_create_session()` 메서드 추가 (get-or-create 패턴)
+- **개선**: 각 에이전트가 독립적인 세션 관리 (`app_name: debate_{agent_name}`)
+- **참고**: ADK의 `session_id`는 required 파라미터 (자동 관리 아님)
 
 ## 트러블슈팅
 
