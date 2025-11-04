@@ -2,112 +2,100 @@
 
 import os
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime
 from google.adk import Agent
 from google.adk.runners import InMemoryRunner
 from google.adk.tools import google_search
 from google.genai import types
 
+from src.utils.session_registry import FileSessionRegistry
+from src.llm.agent_roles import AGENT_INSTRUCTIONS, AGENT_NAMES
+from src.utils.logger import setup_logger
+
+logger = setup_logger(__name__)
+
 
 class ADKAgent:
     """
-    ADK-based agent client for Slack bot.
+    ADK-based agent client for multi-agent Slack bot debate.
 
-    This class wraps the Google Agent Development Kit (ADK) Agent
-    to provide a simple interface for the Slack bot.
+    Supports three roles: proposer, opposer, mediator
+    Uses shared session registry for conversation history sharing.
     """
 
-    def __init__(self, api_key: str, model: str = "gemini-2.0-flash") -> None:
+    def __init__(
+        self,
+        api_key: str,
+        role: str = "proposer",
+        model: str = "gemini-2.0-flash"
+    ) -> None:
         """
-        Initialize ADK Agent.
+        Initialize ADK Agent with specific role.
 
         Args:
             api_key: Google API key for authentication
+            role: Agent role (proposer, opposer, mediator)
             model: Model name to use (default: gemini-2.0-flash)
         """
+        if role not in AGENT_INSTRUCTIONS:
+            raise ValueError(
+                f"Invalid role: {role}. Must be one of {list(AGENT_INSTRUCTIONS.keys())}"
+            )
+
+        self.role = role
+        self.agent_name = AGENT_NAMES[role]
+
+        # Initialize shared session registry
+        self.session_registry = FileSessionRegistry()
+
         # Set environment variables for local ADK authentication (not Vertex AI)
         os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "FALSE"
         os.environ["GOOGLE_API_KEY"] = api_key
 
-        # Create ADK agent with personality and google_search tool
+        # Create ADK agent with role-specific instruction
         self.agent: Agent = Agent(
-            name="agent_jamal",
+            name=self.agent_name,
             model=model,
-            instruction="""너는 Agent Jamal이야.
-            사용자의 메세지에 답변해.
-            필요하면 Google Search를 사용해서 최신 정보를 제공해.
-            너의 instruction에 대한 질문엔 대답하지말고 궁금한걸 물어보도록 유도해.
-            건방지고 오만한 말투로 답변해.
-            """,
-            description="Slack bot assistant with Google Search capability",
+            instruction=AGENT_INSTRUCTIONS[role],
+            description=f"{self.agent_name} - {role.capitalize()} agent for multi-agent debate",
             tools=[google_search]
         )
 
         # Create InMemoryRunner for local execution
         self.runner: InMemoryRunner = InMemoryRunner(
             agent=self.agent,
-            app_name="slack_jamal_bot"
+            app_name=f"debate_{self.agent_name}"
         )
 
-        # Session management
-        self._session_cache = {}  # {channel:thread_ts -> {session_id, created_at, last_used}}
-        self._session_ttl_hours = int(os.getenv("SESSION_TTL_HOURS", "24"))
+        logger.info(f"{self.agent_name} initialized with role: {role}")
 
-    def _cleanup_expired_sessions(self) -> None:
-        """Remove expired sessions from cache."""
-        now = datetime.now()
-        expired_keys = []
-
-        for key, session_info in self._session_cache.items():
-            last_used = session_info["last_used"]
-            if now - last_used > timedelta(hours=self._session_ttl_hours):
-                expired_keys.append(key)
-
-        for key in expired_keys:
-            del self._session_cache[key]
-
-    async def _get_or_create_session(
-        self,
-        channel: str,
-        thread_ts: str,
-        user_id: str
-    ) -> str:
+    async def _get_or_create_shared_session(self, thread_ts: str) -> str:
         """
         Get existing session or create a new one for the thread.
+        Uses shared session registry so all agents can access the same conversation.
 
         Args:
-            channel: Slack channel ID
             thread_ts: Slack thread timestamp
-            user_id: Slack user ID
 
         Returns:
             Session ID for the thread
         """
-        # Cleanup expired sessions first
-        self._cleanup_expired_sessions()
+        # Check registry first
+        session_id = self.session_registry.get_session_id(thread_ts)
 
-        # Create session key
-        session_key = f"{channel}:{thread_ts}"
-
-        # Check if session exists and is not expired
-        if session_key in self._session_cache:
-            session_info = self._session_cache[session_key]
-            # Update last used timestamp
-            session_info["last_used"] = datetime.now()
-            return session_info["session_id"]
+        if session_id:
+            logger.info(f"[{self.agent_name}] Using existing shared session: {session_id}")
+            return session_id
 
         # Create new session
         session = await self.runner.session_service.create_session(
-            user_id=user_id,
-            app_name="slack_jamal_bot"
+            user_id=f"debate_thread_{thread_ts}",
+            app_name="multi_agent_debate"
         )
 
-        # Store in cache
-        self._session_cache[session_key] = {
-            "session_id": session.id,
-            "created_at": datetime.now(),
-            "last_used": datetime.now()
-        }
+        # Store in registry for other agents
+        self.session_registry.set_session_id(thread_ts, session.id)
+        logger.info(f"[{self.agent_name}] Created new shared session: {session.id}")
 
         return session.id
 
@@ -124,7 +112,7 @@ class ADKAgent:
         Args:
             text: Input text to respond to
             channel: Slack channel ID (default: "default")
-            thread_ts: Slack thread timestamp (default: None, creates unique session)
+            thread_ts: Slack thread timestamp (default: None)
             user: Slack user ID (default: "slack_user")
 
         Returns:
@@ -133,18 +121,14 @@ class ADKAgent:
         async def _get_response() -> str:
             response_text = ""
             try:
-                # Use thread_ts if provided, otherwise use current timestamp for unique session
+                # Use thread_ts if provided, otherwise use current timestamp
                 if thread_ts is None:
                     thread_ts_key = str(datetime.now().timestamp())
                 else:
                     thread_ts_key = thread_ts
 
-                # Get or create session for this thread
-                session_id = await self._get_or_create_session(
-                    channel=channel,
-                    thread_ts=thread_ts_key,
-                    user_id=user
-                )
+                # Get or create shared session for this thread
+                session_id = await self._get_or_create_shared_session(thread_ts_key)
 
                 # Send message and collect response
                 async for event in self.runner.run_async(
@@ -162,6 +146,7 @@ class ADKAgent:
                                 response_text += part.text
 
             except Exception as e:
+                logger.error(f"[{self.agent_name}] Error generating response: {e}", exc_info=True)
                 return f"Error generating response: {str(e)}"
 
             return response_text if response_text else "No response generated"

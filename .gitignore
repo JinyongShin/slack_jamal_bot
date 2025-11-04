@@ -11,7 +11,12 @@ wheels/
 
 # Environment variables
 .env
+.env.jamal
+.env.ryan
+.env.james
 
+# Multi-agent session registry
+shared_sessions.json
 
 # Claude Code MCP
 .mcp.json

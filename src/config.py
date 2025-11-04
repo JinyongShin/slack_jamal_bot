@@ -1,4 +1,4 @@
-"""Configuration management for AgentJamal bot."""
+"""Configuration management for Multi-Agent Debate bot."""
 
 import os
 from dotenv import load_dotenv
@@ -17,6 +17,10 @@ class Config:
     # Google Generative AI API Key (for ADK Agent)
     # Primary key is GOOGLE_GENAI_API_KEY, falls back to GEMINI_API_KEY for backward compatibility
     GOOGLE_GENAI_API_KEY = os.getenv("GOOGLE_GENAI_API_KEY") or os.getenv("GEMINI_API_KEY")
+
+    # Agent Configuration (NEW)
+    AGENT_ROLE = os.getenv("AGENT_ROLE", "proposer")
+    AGENT_NAME = os.getenv("AGENT_NAME", "AgentJamal")
 
     # Bot Configuration
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
@@ -43,6 +47,13 @@ class Config:
         if missing:
             raise ValueError(
                 f"Missing required environment variables: {', '.join(missing)}"
+            )
+
+        # Validate agent role
+        valid_roles = ["proposer", "opposer", "mediator"]
+        if cls.AGENT_ROLE not in valid_roles:
+            raise ValueError(
+                f"Invalid AGENT_ROLE: {cls.AGENT_ROLE}. Must be one of {valid_roles}"
             )
 
         return True
