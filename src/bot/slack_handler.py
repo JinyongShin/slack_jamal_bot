@@ -1,5 +1,6 @@
 """Slack bot event handler."""
 
+from typing import Optional
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 from slack_sdk.errors import SlackApiError
@@ -13,20 +14,22 @@ logger = setup_logger(__name__, Config.LOG_LEVEL)
 class SlackBot:
     """Slack bot handler with Socket Mode."""
 
-    def __init__(self, message_processor):
+    def __init__(self, message_processor, debate_orchestrator=None):
         """
         Initialize Slack bot.
 
         Args:
-            message_processor: Message processing handler
+            message_processor: Message processing handler (for backward compatibility)
+            debate_orchestrator: Optional DebateOrchestrator for multi-agent debates
         """
         self.app = App(token=Config.SLACK_BOT_TOKEN)
         self.message_processor = message_processor
+        self.debate_orchestrator = debate_orchestrator
 
         # Register event listeners
         self._register_listeners()
 
-        logger.info("SlackBot initialized successfully")
+        logger.info(f"SlackBot initialized successfully (Orchestrator mode: {debate_orchestrator is not None})")
 
     def _register_listeners(self):
         """Register Slack event listeners."""
@@ -44,6 +47,42 @@ class SlackBot:
             try:
                 logger.info(f"Received mention: {event}")
 
+                # Extract basic info
+                text = event.get("text", "")
+                user = event.get("user")
+                channel = event.get("channel")
+                thread_ts = event.get("thread_ts") or event.get("ts")
+
+                # Check if this is an orchestrator-managed debate
+                if self.debate_orchestrator:
+                    # Filter out mentions during active debates
+                    if self.debate_orchestrator.is_debate_active(thread_ts):
+                        logger.info(f"Ignoring mention in active debate thread: {thread_ts}")
+                        return
+
+                    # Check if mentioned agent is AgentJamal (debate initiator)
+                    if "@AgentJamal" in text or "proposer" in text.lower():
+                        logger.info(f"Starting orchestrated debate in thread: {thread_ts}")
+                        # Add reaction to show we received it
+                        try:
+                            client.reactions_add(
+                                channel=channel,
+                                timestamp=event["ts"],
+                                name="speech_balloon"
+                            )
+                        except SlackApiError as e:
+                            logger.warning(f"Failed to add reaction: {e}")
+
+                        # Start debate asynchronously
+                        self.debate_orchestrator.start_debate(
+                            channel=channel,
+                            thread_ts=thread_ts,
+                            initial_message=text,
+                            user_id=user
+                        )
+                        return
+
+                # Fallback to regular message processor (backward compatibility)
                 # Add loading reaction
                 try:
                     client.reactions_add(
@@ -53,12 +92,6 @@ class SlackBot:
                     )
                 except SlackApiError as e:
                     logger.warning(f"Failed to add reaction: {e}")
-
-                # Extract message text (remove bot mention)
-                text = event.get("text", "")
-                user = event.get("user")
-                channel = event.get("channel")
-                thread_ts = event.get("thread_ts") or event.get("ts")
 
                 # Process message
                 response = self.message_processor.process_message(

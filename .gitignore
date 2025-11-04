@@ -18,5 +18,10 @@ wheels/
 # Multi-agent session registry
 shared_sessions.json
 
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
 # Claude Code MCP
 .mcp.json

@@ -3,13 +3,11 @@
 import os
 import asyncio
 from datetime import datetime
-from google.adk import Agent
+from importlib import import_module
 from google.adk.runners import InMemoryRunner
-from google.adk.tools import google_search
 from google.genai import types
 
-from src.utils.session_registry import FileSessionRegistry
-from src.llm.agent_roles import AGENT_INSTRUCTIONS, AGENT_NAMES
+from src.llm.agent_roles import AGENT_NAMES
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -20,7 +18,7 @@ class ADKAgent:
     ADK-based agent client for multi-agent Slack bot debate.
 
     Supports three roles: proposer, opposer, mediator
-    Uses shared session registry for conversation history sharing.
+    Each agent maintains independent session per thread.
     """
 
     def __init__(
@@ -32,72 +30,46 @@ class ADKAgent:
         """
         Initialize ADK Agent with specific role.
 
+        Loads agent from file-based structure with independent app_name.
+
         Args:
             api_key: Google API key for authentication
             role: Agent role (proposer, opposer, mediator)
             model: Model name to use (default: gemini-2.0-flash)
         """
-        if role not in AGENT_INSTRUCTIONS:
+        valid_roles = ["proposer", "opposer", "mediator"]
+        if role not in valid_roles:
             raise ValueError(
-                f"Invalid role: {role}. Must be one of {list(AGENT_INSTRUCTIONS.keys())}"
+                f"Invalid role: {role}. Must be one of {valid_roles}"
             )
 
         self.role = role
         self.agent_name = AGENT_NAMES[role]
 
-        # Initialize shared session registry
-        self.session_registry = FileSessionRegistry()
-
         # Set environment variables for local ADK authentication (not Vertex AI)
         os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "FALSE"
         os.environ["GOOGLE_API_KEY"] = api_key
 
-        # Create ADK agent with role-specific instruction
-        self.agent: Agent = Agent(
-            name=self.agent_name,
-            model=model,
-            instruction=AGENT_INSTRUCTIONS[role],
-            description=f"{self.agent_name} - {role.capitalize()} agent for multi-agent debate",
-            tools=[google_search]
-        )
+        # Load agent from file system (file-based agents for proper app_name inference)
+        # Map role to agent module path
+        agent_module_map = {
+            "proposer": "src.agents.jamal.agent",
+            "opposer": "src.agents.ryan.agent",
+            "mediator": "src.agents.james.agent"
+        }
 
-        # Create InMemoryRunner for local execution
+        module_path = agent_module_map[role]
+        agent_module = import_module(module_path)
+        self.agent = agent_module.root_agent
+
+        # Create InMemoryRunner with INDEPENDENT app_name per agent
+        # Each agent maintains its own session pool
         self.runner: InMemoryRunner = InMemoryRunner(
             agent=self.agent,
-            app_name=f"debate_{self.agent_name}"
+            app_name=f"debate_{self.agent_name.lower()}"
         )
 
         logger.info(f"{self.agent_name} initialized with role: {role}")
-
-    async def _get_or_create_shared_session(self, thread_ts: str) -> str:
-        """
-        Get existing session or create a new one for the thread.
-        Uses shared session registry so all agents can access the same conversation.
-
-        Args:
-            thread_ts: Slack thread timestamp
-
-        Returns:
-            Session ID for the thread
-        """
-        # Check registry first
-        session_id = self.session_registry.get_session_id(thread_ts)
-
-        if session_id:
-            logger.info(f"[{self.agent_name}] Using existing shared session: {session_id}")
-            return session_id
-
-        # Create new session
-        session = await self.runner.session_service.create_session(
-            user_id=f"debate_thread_{thread_ts}",
-            app_name="multi_agent_debate"
-        )
-
-        # Store in registry for other agents
-        self.session_registry.set_session_id(thread_ts, session.id)
-        logger.info(f"[{self.agent_name}] Created new shared session: {session.id}")
-
-        return session.id
 
     def generate_response(
         self,
@@ -108,6 +80,9 @@ class ADKAgent:
     ) -> str:
         """
         Generate a response for the given text.
+
+        Each agent maintains independent session per thread.
+        ADK automatically manages session creation and retrieval.
 
         Args:
             text: Input text to respond to
@@ -120,20 +95,23 @@ class ADKAgent:
         """
         async def _get_response() -> str:
             response_text = ""
+
             try:
-                # Use thread_ts if provided, otherwise use current timestamp
+                # Use thread_ts as user_id for thread-based context
+                # Each agent maintains its own session per thread
                 if thread_ts is None:
                     thread_ts_key = str(datetime.now().timestamp())
                 else:
                     thread_ts_key = thread_ts
 
-                # Get or create shared session for this thread
-                session_id = await self._get_or_create_shared_session(thread_ts_key)
+                user_id = f"thread_{thread_ts_key}"
+
+                logger.info(f"[{self.agent_name}] Generating response for user: {user_id}")
 
                 # Send message and collect response
+                # ADK automatically creates/retrieves session based on user_id
                 async for event in self.runner.run_async(
-                    user_id=user,
-                    session_id=session_id,
+                    user_id=user_id,
                     new_message=types.Content(
                         role="user",
                         parts=[types.Part.from_text(text=text)]
