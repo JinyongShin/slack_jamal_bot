@@ -54,17 +54,15 @@ slack_jamal_bot/
 │   ├── test_adk_agent.py         # ADK Agent 테스트
 │   ├── smoke_test.py             # 초기화 검증
 │   ├── unit/                     # 단위 테스트
-│   │   ├── test_session_registry.py
+│   │   ├── test_message_processor.py
 │   │   └── ...
 │   └── integration/              # 통합 테스트
-├── .env.jamal.sample             # AgentJamal 환경변수 템플릿
-├── .env.ryan.sample              # AgentRyan 환경변수 템플릿
-├── .env.james.sample             # AgentJames 환경변수 템플릿
-├── .env.jamal                    # AgentJamal 환경변수 (gitignored)
-├── .env.ryan                     # AgentRyan 환경변수 (gitignored)
-├── .env.james                    # AgentJames 환경변수 (gitignored)
-├── run_agents.sh                 # 3개 에이전트 동시 실행 스크립트
-├── stop_agents.sh                # 모든 에이전트 종료 스크립트
+├── .env.sample                   # 환경변수 템플릿 (Orchestrator Mode용)
+├── .env.jamal.sample             # AgentJamal 환경변수 템플릿 (레거시)
+├── .env.ryan.sample              # AgentRyan 환경변수 템플릿 (레거시)
+├── .env.james.sample             # AgentJames 환경변수 템플릿 (레거시)
+├── run_agents.sh                 # 3개 에이전트 동시 실행 스크립트 (레거시)
+├── stop_agents.sh                # 모든 에이전트 종료 스크립트 (레거시)
 └── README.md
 ```
 
@@ -110,7 +108,7 @@ uv sync
 ### 4. Google Generative AI API 키 발급
 
 1. [Google AI Studio](https://aistudio.google.com/app/apikey)에서 API 키 발급
-2. API 키를 복사 (3개 봇이 공유)
+2. API 키를 복사
 
 ### 5. 환경 변수 설정
 
@@ -370,16 +368,21 @@ uv run pytest tests/unit/test_message_processor.py -v
 
 자세한 내용은 `migration_plan.md`와 `PHASE5_RESULTS.md`를 참조하세요.
 
-### Phase 6: Multi-Agent Debate System
+### Phase 6: Multi-Agent Debate System (Orchestrator)
 단일 봇에서 3개 에이전트 토론 시스템으로 확장:
 - **이전**: 단일 AgentJamal 봇
 - **현재**: AgentJamal (Proposer) + AgentRyan (Opposer) + AgentJames (Mediator)
 - **핵심 변경사항**:
-  - FileSessionRegistry 추가 (공유 세션 관리)
-  - agent_roles.py 추가 (역할별 instruction)
-  - 멀티 인스턴스 실행 지원
-  - 공유 대화 컨텍스트
-- **개선**: 구조화된 토론, 다각적 분석, 균형잡힌 결론
+  - **DebateOrchestrator 추가**: 프로그래매틱 토론 흐름 제어
+  - **독립 세션 관리**: 각 에이전트가 독립적인 app_name으로 세션 관리
+  - **File-based Agent 구조**: `src/agents/{name}/agent.py` 구조로 ADK 요구사항 준수
+  - **Hybrid Architecture**: Orchestrator 제어 + Visual mentions for observability
+  - **자동 루프**: 종료 조건까지 자동 토론 진행
+- **개선**:
+  - Session 충돌 해결 (독립 세션으로 "Session not found" 오류 제거)
+  - 단일 프로세스 실행 (3개 프로세스 → 1개 프로세스)
+  - 프로그래매틱 흐름 제어로 안정적인 토론 진행
+  - Slack에서 자연스러운 대화 관찰 가능
 
 ## 라이선스
 

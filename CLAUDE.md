@@ -249,3 +249,101 @@ def handle_mention(self, thread_ts):
 4. Not using `from . import agent` in `__init__.py` files
 5. **Trying to share session_id across multiple agents** ❌
 6. **Relying on Slack mention events for debate flow control** ❌
+
+### Critical Implementation Details: Orchestrator Pattern
+
+**Background Threading for Debate Loops:**
+When implementing debate orchestrators that run until termination, use background threads to prevent blocking Slack event handling:
+
+```python
+# WRONG: Blocking implementation
+def handle_mention(event):
+    orchestrator.start_debate(...)  # This blocks the event handler!
+    # Slack events are blocked until debate finishes
+
+# CORRECT: Background thread implementation
+def handle_mention(event):
+    debate_thread = threading.Thread(
+        target=orchestrator._run_debate,
+        args=(channel, thread_ts, message, user_id),
+        daemon=True
+    )
+    debate_thread.start()  # Returns immediately, debate runs in background
+```
+
+**Why this matters:**
+- Slack Socket Mode expects event handlers to return quickly
+- Long-running debates (multiple rounds, API calls) would block other events
+- Background threads allow concurrent debate handling in different threads
+- `daemon=True` ensures threads don't prevent app shutdown
+
+**Context Building in Debate Loops:**
+Build cumulative context by concatenating agent responses:
+
+```python
+context = f"주제: {initial_message}"
+
+while not terminated:
+    jamal_response = jamal_agent.generate_response(text=context, thread_ts=thread_ts)
+    context += f"\n\nAgentJamal: {jamal_response}"
+
+    james_summary = james_agent.generate_response(text=context + "\n\n위 내용을 요약하고...", ...)
+    context += f"\n\nAgentJames: {james_summary}"
+
+    ryan_response = ryan_agent.generate_response(text=context, thread_ts=thread_ts)
+    context += f"\n\nAgentRyan: {ryan_response}"
+```
+
+**Why cumulative context is important:**
+- Each agent sees the full conversation history in the prompt
+- ADK sessions store agent-specific history, NOT shared debate history
+- Context string ensures all agents have the same view of the debate
+- Allows agents to reference previous points made by others
+
+**Agent Instruction Design for Orchestrated Flow:**
+When using orchestrator pattern, explicitly tell agents NOT to mention each other:
+
+```python
+AGENT_INSTRUCTIONS = {
+    "proposer": """당신은 AgentJamal입니다.
+
+    ⚠️ 중요: 다른 에이전트를 멘션하지 마세요 (@AgentRyan, @AgentJames 등).
+    시스템이 자동으로 처리합니다.
+    """,
+}
+```
+
+**Why this is necessary:**
+- Prevents agents from triggering unwanted Slack events
+- Orchestrator handles all flow control and mention injection
+- Keeps agent responses clean and focused on content
+- Avoids confusion between functional mentions and cosmetic ones
+
+**Thread Safety for Active Debate Tracking:**
+Use threading locks when accessing shared state:
+
+```python
+class DebateOrchestrator:
+    active_debates: Dict[str, bool] = {}  # Class variable shared across instances
+    _lock = threading.Lock()
+
+    def start_debate(self, thread_ts, ...):
+        with self._lock:
+            if thread_ts in self.active_debates:
+                return  # Already active
+            self.active_debates[thread_ts] = True
+
+    def _run_debate(self, ...):
+        try:
+            # Run debate loop
+            ...
+        finally:
+            with self._lock:
+                del self.active_debates[thread_ts]  # Always cleanup
+```
+
+**Why thread safety matters:**
+- Multiple Slack events can arrive concurrently
+- Race conditions could start duplicate debates for same thread
+- Lock ensures atomic check-and-set operations
+- `finally` block ensures cleanup even on errors
