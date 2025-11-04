@@ -11,7 +11,15 @@ class Config:
     """Application configuration."""
 
     # Slack Configuration
+    # For Orchestrator Mode: 3 separate bot tokens for visual multi-agent appearance
+    SLACK_BOT_TOKEN_JAMAL = os.getenv("SLACK_BOT_TOKEN_JAMAL")
+    SLACK_BOT_TOKEN_RYAN = os.getenv("SLACK_BOT_TOKEN_RYAN")
+    SLACK_BOT_TOKEN_JAMES = os.getenv("SLACK_BOT_TOKEN_JAMES")
+
+    # Legacy: Single bot token (for backward compatibility)
     SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
+
+    # Socket Mode token (typically from one of the bot apps, e.g., Jamal)
     SLACK_APP_TOKEN = os.getenv("SLACK_APP_TOKEN")
 
     # Google Generative AI API Key (for ADK Agent)
@@ -36,11 +44,29 @@ class Config:
         Returns:
             True if all required values are present, False otherwise
         """
-        required_vars = [
-            ("SLACK_BOT_TOKEN", cls.SLACK_BOT_TOKEN),
-            ("SLACK_APP_TOKEN", cls.SLACK_APP_TOKEN),
-            ("GOOGLE_GENAI_API_KEY or GEMINI_API_KEY", cls.GOOGLE_GENAI_API_KEY),
-        ]
+        # Check if using Orchestrator Mode (3 bot tokens) or Legacy Mode (1 bot token)
+        using_orchestrator = all([
+            cls.SLACK_BOT_TOKEN_JAMAL,
+            cls.SLACK_BOT_TOKEN_RYAN,
+            cls.SLACK_BOT_TOKEN_JAMES
+        ])
+
+        if using_orchestrator:
+            # Orchestrator Mode validation
+            required_vars = [
+                ("SLACK_BOT_TOKEN_JAMAL", cls.SLACK_BOT_TOKEN_JAMAL),
+                ("SLACK_BOT_TOKEN_RYAN", cls.SLACK_BOT_TOKEN_RYAN),
+                ("SLACK_BOT_TOKEN_JAMES", cls.SLACK_BOT_TOKEN_JAMES),
+                ("SLACK_APP_TOKEN", cls.SLACK_APP_TOKEN),
+                ("GOOGLE_GENAI_API_KEY or GEMINI_API_KEY", cls.GOOGLE_GENAI_API_KEY),
+            ]
+        else:
+            # Legacy Mode validation
+            required_vars = [
+                ("SLACK_BOT_TOKEN", cls.SLACK_BOT_TOKEN),
+                ("SLACK_APP_TOKEN", cls.SLACK_APP_TOKEN),
+                ("GOOGLE_GENAI_API_KEY or GEMINI_API_KEY", cls.GOOGLE_GENAI_API_KEY),
+            ]
 
         missing = [name for name, value in required_vars if not value]
 
@@ -49,7 +75,7 @@ class Config:
                 f"Missing required environment variables: {', '.join(missing)}"
             )
 
-        # Validate agent role
+        # Validate agent role (for Legacy Mode)
         valid_roles = ["proposer", "opposer", "mediator"]
         if cls.AGENT_ROLE not in valid_roles:
             raise ValueError(

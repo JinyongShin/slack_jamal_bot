@@ -45,12 +45,18 @@ def main():
 
         logger.info("All agents initialized successfully")
 
-        # Initialize Slack client for orchestrator
-        slack_client = WebClient(token=Config.SLACK_BOT_TOKEN)
+        # Initialize 3 separate Slack clients for each agent
+        # This allows each agent to post messages as their own bot identity
+        jamal_client = WebClient(token=Config.SLACK_BOT_TOKEN_JAMAL)
+        ryan_client = WebClient(token=Config.SLACK_BOT_TOKEN_RYAN)
+        james_client = WebClient(token=Config.SLACK_BOT_TOKEN_JAMES)
+        logger.info("Slack clients initialized for all 3 agents")
 
-        # Initialize DebateOrchestrator
+        # Initialize DebateOrchestrator with 3 separate clients
         orchestrator = DebateOrchestrator(
-            slack_client=slack_client,
+            jamal_client=jamal_client,
+            ryan_client=ryan_client,
+            james_client=james_client,
             jamal_agent=jamal_agent,
             ryan_agent=ryan_agent,
             james_agent=james_agent,

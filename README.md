@@ -86,12 +86,14 @@ uv sync
 
 ### 3. Slack 앱 생성
 
-**Orchestrator Mode**: 1개의 Slack 앱만 필요 (모든 에이전트가 하나의 봇으로 실행)
+**Orchestrator Mode**: 3개의 독립 Slack 앱 필요 (각 에이전트가 자신의 봇으로 메시지 전송)
 
-**참고**: 이전 방식(3개 독립 앱)도 여전히 지원되지만, Orchestrator Mode 권장
+**중요**: 3개 에이전트가 각각 다른 봇 계정으로 메시지를 보내기 위해 3개의 Slack 앱을 만들어야 합니다.
+
+#### 3-1. AgentJamal (Proposer) 앱 생성
 
 1. [Slack API](https://api.slack.com/apps)에서 새 앱 생성
-   - App Name: `Multi-Agent Debate` (또는 원하는 이름)
+   - App Name: `AgentJamal`
 2. **OAuth & Permissions**에서 다음 권한 추가:
    - `app_mentions:read` - 멘션 이벤트 읽기
    - `chat:write` - 메시지 보내기
@@ -99,11 +101,29 @@ uv sync
    - `reactions:write` - 리액션 추가
 3. **Socket Mode** 활성화
    - App-Level Token 생성 (scope: `connections:write`)
-   - **App Token 복사** (xapp-로 시작)
+   - **App Token 복사** (xapp-로 시작) → `SLACK_APP_TOKEN`
 4. **Event Subscriptions**에서 이벤트 구독:
    - `app_mention` - 앱 멘션 이벤트
 5. 앱을 워크스페이스에 설치
-   - **Bot User OAuth Token 복사** (xoxb-로 시작)
+   - **Bot User OAuth Token 복사** (xoxb-로 시작) → `SLACK_BOT_TOKEN_JAMAL`
+
+#### 3-2. AgentRyan (Opposer) 앱 생성
+
+1. [Slack API](https://api.slack.com/apps)에서 새 앱 생성
+   - App Name: `AgentRyan`
+2. **OAuth & Permissions**에서 동일한 권한 추가 (위와 동일)
+3. Socket Mode는 활성화하지 **않아도** 됨 (이벤트 수신은 Jamal만)
+4. 앱을 워크스페이스에 설치
+   - **Bot User OAuth Token 복사** (xoxb-로 시작) → `SLACK_BOT_TOKEN_RYAN`
+
+#### 3-3. AgentJames (Mediator) 앱 생성
+
+1. [Slack API](https://api.slack.com/apps)에서 새 앱 생성
+   - App Name: `AgentJames`
+2. **OAuth & Permissions**에서 동일한 권한 추가 (위와 동일)
+3. Socket Mode는 활성화하지 **않아도** 됨 (이벤트 수신은 Jamal만)
+4. 앱을 워크스페이스에 설치
+   - **Bot User OAuth Token 복사** (xoxb-로 시작) → `SLACK_BOT_TOKEN_JAMES`
 
 ### 4. Google Generative AI API 키 발급
 
@@ -115,16 +135,30 @@ uv sync
 샘플 파일을 복사하여 .env 파일을 생성하세요:
 
 ```bash
-cp .env.jamal.sample .env
+cp .env.sample .env
 ```
 
 .env 파일을 열어 다음 값들을 입력하세요:
 
-- `SLACK_BOT_TOKEN`: Bot User OAuth Token (xoxb-로 시작)
-- `SLACK_APP_TOKEN`: App-Level Token (xapp-로 시작)
-- `GOOGLE_GENAI_API_KEY`: Google AI Studio에서 발급받은 API 키
+```bash
+# 3개 봇 토큰 (각각 다른 Slack 앱의 토큰)
+SLACK_BOT_TOKEN_JAMAL=xoxb-your-jamal-bot-token
+SLACK_BOT_TOKEN_RYAN=xoxb-your-ryan-bot-token
+SLACK_BOT_TOKEN_JAMES=xoxb-your-james-bot-token
 
-**레거시 모드 (3개 독립 앱)**:
+# Socket Mode 토큰 (Jamal 앱의 App-Level Token)
+SLACK_APP_TOKEN=xapp-your-app-token
+
+# Google AI API 키
+GOOGLE_GENAI_API_KEY=your-google-genai-api-key
+```
+
+**중요**:
+- 3개의 `SLACK_BOT_TOKEN_*` 모두 필요
+- `SLACK_APP_TOKEN`은 Jamal 앱의 App-Level Token 사용
+- `GOOGLE_GENAI_API_KEY`는 모든 에이전트가 공유
+
+**레거시 모드 (3개 독립 프로세스)**:
 필요시 `.env.jamal`, `.env.ryan`, `.env.james` 파일로 각각 실행 가능
 
 ## 실행 방법
@@ -138,15 +172,17 @@ uv run python -m src.main_debate
 ```
 
 **특징:**
-- ✅ **단일 Slack 앱**만 필요 (1개 봇)
+- ✅ **3개 Slack 봇**으로 각 에이전트가 자신의 계정으로 메시지 전송
+- ✅ Slack에서 실제로 3명이 대화하는 것처럼 보임
 - ✅ 프로그래매틱 토론 흐름 제어
 - ✅ 자동 루프 실행 (종료 조건까지)
-- ✅ Slack에서 자연스러운 대화 관찰 가능
 - ✅ 독립적인 세션 관리 (에이전트별 context 유지)
 
 **실행 전 확인:**
 - `.env` 파일이 있는지 확인
-- `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`, `GOOGLE_GENAI_API_KEY` 설정 필요
+- 3개 봇 토큰: `SLACK_BOT_TOKEN_JAMAL`, `SLACK_BOT_TOKEN_RYAN`, `SLACK_BOT_TOKEN_JAMES`
+- Socket Mode 토큰: `SLACK_APP_TOKEN`
+- API 키: `GOOGLE_GENAI_API_KEY`
 
 ### 레거시 Mode (3개 독립 앱) ⚠️
 
@@ -191,10 +227,11 @@ Slack에서 **봇을 멘션하면 자동으로 토론이 시작**됩니다:
 ```
 
 **중요 사항**:
-- **봇 이름**: Slack 앱 생성 시 사용자가 정한 이름 (예: `@Multi-Agent-Debate`)
-- **봇 개수**: Orchestrator Mode는 **1개의 봇**만 사용
-- **에이전트 역할**: AgentJamal, AgentRyan, AgentJames는 내부 역할명 (Slack에서 보이지 않음)
-- **멘션 형식**: `<@USER_ID>` 형식으로 감지됨 (어떤 멘션 방식도 동작)
+- **봇 이름**: `@AgentJamal`, `@AgentRyan`, `@AgentJames` (Slack 앱 생성 시 설정한 이름)
+- **봇 개수**: Orchestrator Mode는 **3개의 독립 봇** 사용
+- **메시지 전송**: 각 에이전트가 자신의 봇 계정으로 메시지 전송
+- **이벤트 수신**: AgentJamal 봇만 Socket Mode로 이벤트 수신
+- **시각적 효과**: Slack에서 3명이 실제로 대화하는 것처럼 보임
 
 토론 자동 진행:
 1. **AgentJamal (Proposer)**: 긍정적 주장 제시
@@ -206,28 +243,28 @@ Slack에서 **봇을 멘션하면 자동으로 토론이 시작**됩니다:
 ### 토론 진행 예시
 
 ```
-사용자: @Multi-Agent-Debate AI 기술이 일자리를 대체할까요?
+사용자: @AgentJamal AI 기술이 일자리를 대체할까요?
 
 🤖 [토론 자동 진행]
 
-AgentJamal:
+@AgentJamal (봇 계정):
 AI 기술은 새로운 일자리를 창출할 것입니다.
 과거 산업혁명 때도 기계가 일부 일자리를 대체했지만,
 더 많은 새로운 직종이 생겨났습니다.
 @AgentJames
 
-AgentJames:
+@AgentJames (봇 계정):
 Jamal님은 AI가 새로운 일자리를 창출할 것이라 보십니다.
 역사적 사례를 근거로 제시하셨네요.
 @AgentRyan 반론 부탁드립니다.
 
-AgentRyan:
+@AgentRyan (봇 계정):
 흥미로운 관점이지만, 몇 가지 우려사항이 있습니다.
 AI의 발전 속도는 과거 산업혁명과는 비교할 수 없을 정도로 빠릅니다.
 단기적으로 대량 실업이 발생할 수 있으며...
 @AgentJames
 
-AgentJames:
+@AgentJames (봇 계정):
 토론을 종료합니다.
 
 두 분의 의견을 종합하면, AI가 일자리에 미치는 영향은
@@ -238,6 +275,11 @@ AgentJames:
 [종료]
 ```
 
+**시각적 효과**:
+- Slack에서 `@AgentJamal`, `@AgentRyan`, `@AgentJames` 세 명이 실제로 대화
+- 각 봇의 프로필 사진과 이름으로 표시
+- 자연스러운 3자 토론 형태
+
 **특징:**
 - 사용자는 첫 멘션만 하면 자동으로 토론 진행
 - Orchestrator가 토론 흐름 제어
@@ -246,6 +288,16 @@ AgentJames:
 - 최대 10라운드까지 진행 (설정 변경 가능)
 
 ## 최근 수정 사항
+
+### 2025-01-04: 3개 독립 봇으로 메시지 전송 (Major Update)
+- **변경**: 1개 봇 → 3개 독립 봇으로 메시지 전송
+- **이유**: 사용자가 각 에이전트가 자신의 봇 계정으로 메시지를 보내는 것을 원함
+- **구현**:
+  - Config: 3개 토큰 로드 (`SLACK_BOT_TOKEN_JAMAL`, `_RYAN`, `_JAMES`)
+  - main_debate.py: 3개 WebClient 생성
+  - DebateOrchestrator: 에이전트별 client 매핑, speaker 파라미터 추가
+- **결과**: Slack에서 `@AgentJamal`, `@AgentRyan`, `@AgentJames`가 각각 메시지 전송
+- **설정**: 3개 Slack 앱 필요 (각각 독립 봇)
 
 ### 2025-01-04: 봇 멘션 감지 로직 수정
 - **문제**: 잘못된 조건 (`if "@AgentJamal" in text`)으로 토론이 시작되지 않음

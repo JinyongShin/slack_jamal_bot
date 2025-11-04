@@ -24,7 +24,9 @@ class DebateOrchestrator:
 
     def __init__(
         self,
-        slack_client: WebClient,
+        jamal_client: WebClient,
+        ryan_client: WebClient,
+        james_client: WebClient,
         jamal_agent: ADKAgent,
         ryan_agent: ADKAgent,
         james_agent: ADKAgent,
@@ -34,19 +36,27 @@ class DebateOrchestrator:
         Initialize DebateOrchestrator.
 
         Args:
-            slack_client: Slack WebClient for posting messages
+            jamal_client: Slack WebClient for AgentJamal
+            ryan_client: Slack WebClient for AgentRyan
+            james_client: Slack WebClient for AgentJames
             jamal_agent: Proposer agent (AgentJamal)
             ryan_agent: Opposer agent (AgentRyan)
             james_agent: Mediator agent (AgentJames)
             max_rounds: Maximum debate rounds before forced termination
         """
-        self.slack_client = slack_client
+        # Map each agent to their corresponding Slack client
+        self.clients = {
+            "jamal": jamal_client,
+            "ryan": ryan_client,
+            "james": james_client
+        }
+
         self.jamal = jamal_agent
         self.ryan = ryan_agent
         self.james = james_agent
         self.max_rounds = max_rounds
 
-        logger.info("DebateOrchestrator initialized")
+        logger.info("DebateOrchestrator initialized with 3 separate bot clients")
 
     def start_debate(
         self,
@@ -122,7 +132,8 @@ class DebateOrchestrator:
                     channel=channel,
                     thread_ts=thread_ts,
                     text=jamal_response,
-                    next_agent="@AgentJames"
+                    next_agent="@AgentJames",
+                    speaker="jamal"
                 )
 
                 context += f"\n\nAgentJamal: {jamal_response}"
@@ -139,7 +150,8 @@ class DebateOrchestrator:
                     channel=channel,
                     thread_ts=thread_ts,
                     text=james_summary,
-                    next_agent="@AgentRyan"
+                    next_agent="@AgentRyan",
+                    speaker="james"
                 )
 
                 context += f"\n\nAgentJames: {james_summary}"
@@ -155,7 +167,8 @@ class DebateOrchestrator:
                     channel=channel,
                     thread_ts=thread_ts,
                     text=ryan_response,
-                    next_agent="@AgentJames"
+                    next_agent="@AgentJames",
+                    speaker="ryan"
                 )
 
                 context += f"\n\nAgentRyan: {ryan_response}"
@@ -179,7 +192,8 @@ class DebateOrchestrator:
                     channel=channel,
                     thread_ts=thread_ts,
                     text=james_check,
-                    next_agent=next_agent
+                    next_agent=next_agent,
+                    speaker="james"
                 )
 
                 context += f"\n\nAgentJames: {james_check}"
@@ -189,7 +203,8 @@ class DebateOrchestrator:
                 self._post_message(
                     channel=channel,
                     thread_ts=thread_ts,
-                    text=f"⚠️ 토론이 최대 라운드({self.max_rounds})에 도달하여 종료되었습니다."
+                    text=f"⚠️ 토론이 최대 라운드({self.max_rounds})에 도달하여 종료되었습니다.",
+                    speaker="james"
                 )
 
             logger.info(f"Debate completed in thread: {thread_ts} after {round_count} rounds")
@@ -199,7 +214,8 @@ class DebateOrchestrator:
             self._post_message(
                 channel=channel,
                 thread_ts=thread_ts,
-                text=f"❌ 토론 중 오류가 발생했습니다: {str(e)}"
+                text=f"❌ 토론 중 오류가 발생했습니다: {str(e)}",
+                speaker="james"
             )
 
         finally:
@@ -265,7 +281,8 @@ class DebateOrchestrator:
         channel: str,
         thread_ts: str,
         text: str,
-        next_agent: Optional[str] = None
+        next_agent: Optional[str] = None,
+        speaker: str = "jamal"
     ) -> None:
         """
         Post message to Slack with optional mention injection.
@@ -277,36 +294,42 @@ class DebateOrchestrator:
             thread_ts: Thread timestamp
             text: Message text
             next_agent: Agent to mention (e.g., "@AgentRyan") or None
+            speaker: Which agent is speaking ("jamal", "ryan", or "james")
         """
         if next_agent:
             message = f"{text}\n\n{next_agent}"
         else:
             message = text
 
-        self._post_message(channel, thread_ts, message)
+        self._post_message(channel, thread_ts, message, speaker)
 
     def _post_message(
         self,
         channel: str,
         thread_ts: str,
-        text: str
+        text: str,
+        speaker: str = "jamal"
     ) -> None:
         """
-        Post message to Slack thread.
+        Post message to Slack thread using the appropriate bot client.
 
         Args:
             channel: Slack channel ID
             thread_ts: Thread timestamp
             text: Message text
+            speaker: Which agent is speaking ("jamal", "ryan", or "james")
         """
         try:
-            self.slack_client.chat_postMessage(
+            # Select the appropriate Slack client based on speaker
+            client = self.clients.get(speaker, self.clients["jamal"])
+            client.chat_postMessage(
                 channel=channel,
                 thread_ts=thread_ts,
                 text=text
             )
+            logger.debug(f"Message posted as {speaker}: {text[:50]}...")
         except Exception as e:
-            logger.error(f"Failed to post message to Slack: {e}", exc_info=True)
+            logger.error(f"Failed to post message to Slack as {speaker}: {e}", exc_info=True)
 
     @classmethod
     def is_debate_active(cls, thread_ts: str) -> bool:
