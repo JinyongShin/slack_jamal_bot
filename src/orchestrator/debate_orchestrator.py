@@ -108,9 +108,10 @@ class DebateOrchestrator:
             channel: Slack channel ID
             thread_ts: Thread timestamp
             initial_message: User's initial message
-            user_id: User ID
+            user_id: User ID who initiated the debate
         """
         try:
+            logger.info(f"Debate started by user: {user_id} in thread: {thread_ts}")
             round_count = 0
             terminated = False
 
@@ -322,12 +323,19 @@ class DebateOrchestrator:
         try:
             # Select the appropriate Slack client based on speaker
             client = self.clients.get(speaker, self.clients["jamal"])
-            client.chat_postMessage(
+
+            # Debug logging to verify correct bot is being used
+            logger.info(f"[POST] Speaker: {speaker} | Message preview: {text[:50]}...")
+
+            response = client.chat_postMessage(
                 channel=channel,
                 thread_ts=thread_ts,
                 text=text
             )
-            logger.debug(f"Message posted as {speaker}: {text[:50]}...")
+
+            # Log the bot user that actually posted the message
+            logger.info(f"[POST] Message sent by bot: {response.get('message', {}).get('username', 'unknown')}")
+
         except Exception as e:
             logger.error(f"Failed to post message to Slack as {speaker}: {e}", exc_info=True)
 
