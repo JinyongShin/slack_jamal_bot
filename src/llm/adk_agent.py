@@ -71,6 +71,49 @@ class ADKAgent:
 
         logger.info(f"{self.agent_name} initialized with role: {role}")
 
+    async def _get_or_create_session(self, thread_ts: str, user_id: str) -> str:
+        """
+        Get existing session or create new one for this thread.
+        Each agent maintains independent session per thread.
+
+        Args:
+            thread_ts: Thread timestamp (used for logging)
+            user_id: User ID (thread-based: "thread_{timestamp}")
+
+        Returns:
+            Session ID for this agent's conversation with this thread
+        """
+        app_name = f"debate_{self.agent_name.lower()}"
+
+        # Try to find existing session for this user
+        try:
+            sessions = await self.runner.session_service.list_sessions(
+                app_name=app_name,
+                user_id=user_id
+            )
+
+            if sessions:
+                session_id = sessions[0].id
+                logger.info(f"[{self.agent_name}] Reusing session: {session_id}")
+                return session_id
+
+        except Exception as e:
+            logger.warning(f"[{self.agent_name}] Error listing sessions: {e}")
+
+        # Create new session
+        try:
+            session = await self.runner.session_service.create_session(
+                app_name=app_name,
+                user_id=user_id,
+                state={}  # Initial empty state
+            )
+            logger.info(f"[{self.agent_name}] Created new session: {session.id}")
+            return session.id
+
+        except Exception as e:
+            logger.error(f"[{self.agent_name}] Error creating session: {e}", exc_info=True)
+            raise
+
     def generate_response(
         self,
         text: str,
@@ -106,12 +149,19 @@ class ADKAgent:
 
                 user_id = f"thread_{thread_ts_key}"
 
-                logger.info(f"[{self.agent_name}] Generating response for user: {user_id}")
+                # Get or create session for this agent + thread
+                session_id = await self._get_or_create_session(thread_ts_key, user_id)
+
+                logger.info(
+                    f"[{self.agent_name}] Generating response | "
+                    f"user: {user_id} | session: {session_id}"
+                )
 
                 # Send message and collect response
-                # ADK automatically creates/retrieves session based on user_id
+                # session_id is required parameter
                 async for event in self.runner.run_async(
                     user_id=user_id,
+                    session_id=session_id,
                     new_message=types.Content(
                         role="user",
                         parts=[types.Part.from_text(text=text)]
