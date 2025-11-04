@@ -60,27 +60,26 @@ class SlackBot:
                         logger.info(f"Ignoring mention in active debate thread: {thread_ts}")
                         return
 
-                    # Check if mentioned agent is AgentJamal (debate initiator)
-                    if "@AgentJamal" in text or "proposer" in text.lower():
-                        logger.info(f"Starting orchestrated debate in thread: {thread_ts}")
-                        # Add reaction to show we received it
-                        try:
-                            client.reactions_add(
-                                channel=channel,
-                                timestamp=event["ts"],
-                                name="speech_balloon"
-                            )
-                        except SlackApiError as e:
-                            logger.warning(f"Failed to add reaction: {e}")
-
-                        # Start debate asynchronously
-                        self.debate_orchestrator.start_debate(
+                    # Any bot mention starts a debate (orchestrator mode)
+                    logger.info(f"Starting orchestrated debate in thread: {thread_ts}")
+                    # Add reaction to show we received it
+                    try:
+                        client.reactions_add(
                             channel=channel,
-                            thread_ts=thread_ts,
-                            initial_message=text,
-                            user_id=user
+                            timestamp=event["ts"],
+                            name="speech_balloon"
                         )
-                        return
+                    except SlackApiError as e:
+                        logger.warning(f"Failed to add reaction: {e}")
+
+                    # Start debate asynchronously
+                    self.debate_orchestrator.start_debate(
+                        channel=channel,
+                        thread_ts=thread_ts,
+                        initial_message=text,
+                        user_id=user
+                    )
+                    return
 
                 # Fallback to regular message processor (backward compatibility)
                 # Add loading reaction
