@@ -22,7 +22,10 @@ class SlackBot:
             message_processor: Message processing handler (for backward compatibility)
             debate_orchestrator: Optional DebateOrchestrator for multi-agent debates
         """
-        self.app = App(token=Config.SLACK_BOT_TOKEN)
+        # Use Jamal's token for Socket Mode connection (Orchestrator mode)
+        # Falls back to legacy SLACK_BOT_TOKEN for backward compatibility
+        bot_token = Config.SLACK_BOT_TOKEN_JAMAL or Config.SLACK_BOT_TOKEN
+        self.app = App(token=bot_token)
         self.message_processor = message_processor
         self.debate_orchestrator = debate_orchestrator
 
