@@ -12,31 +12,44 @@ Google Agent Development Kit (ADK)를 활용한 3개 에이전트 토론 시스�
 - **실시간 정보 검색**:
   - Google Search 도구 내장 (최신 정보 자동 검색)
   - 날씨, 뉴스, 일반 정보 등 모든 검색 가능
-- **공유 대화 컨텍스트**:
-  - 3개 에이전트가 동일 스레드의 대화 히스토리 공유
-  - Google ADK 세션 관리를 통한 자동 컨텍스트 공유
-  - 경량 파일 기반 세션 레지스트리
-  - 자동 세션 만료 (기본 24시간)
+- **하이브리드 아키텍처**:
+  - **Orchestrator Pattern**: 토론 흐름을 프로그래매틱하게 제어
+  - **Visual Mentions**: Slack에서 자연스러운 대화 흐름 관찰 가능
+  - **Independent Sessions**: 각 에이전트가 독립적인 세션 유지
 - **구조화된 토론 흐름**:
-  - 에이전트 간 자동 멘션
-  - 합의 도달 또는 반복 논점 시 자동 종료
+  - Jamal (제안) → James (요약) → Ryan (반론) → James (종료 판단)
+  - 자동 루프: 종료 조건 도달까지 자동 진행
+  - 합의 도달 또는 반복 논점 시 James가 자동 종료
 
 ## 프로젝트 구조
 
 ```
 slack_jamal_bot/
 ├── src/
+│   ├── agents/
+│   │   ├── jamal/                # AgentJamal (Proposer)
+│   │   │   ├── agent.py          # File-based agent definition
+│   │   │   └── __init__.py
+│   │   ├── ryan/                 # AgentRyan (Opposer)
+│   │   │   ├── agent.py
+│   │   │   └── __init__.py
+│   │   └── james/                # AgentJames (Mediator)
+│   │       ├── agent.py
+│   │       └── __init__.py
 │   ├── bot/
-│   │   ├── slack_handler.py      # Slack 이벤트 처리
+│   │   ├── slack_handler.py      # Slack 이벤트 처리 (orchestrator 지원)
 │   │   └── message_processor.py  # 메시지 처리 로직
 │   ├── llm/
-│   │   ├── adk_agent.py          # Multi-role ADK Agent (공유 세션)
-│   │   └── agent_roles.py        # 에이전트 역할 정의 (Proposer/Opposer/Mediator)
+│   │   ├── adk_agent.py          # ADK Agent (독립 세션)
+│   │   └── agent_roles.py        # 에이전트 역할 정의
+│   ├── orchestrator/
+│   │   ├── debate_orchestrator.py # 토론 흐름 제어
+│   │   └── __init__.py
 │   ├── utils/
-│   │   ├── logger.py             # 로깅 설정
-│   │   └── session_registry.py   # 공유 세션 레지스트리 (thread-safe)
+│   │   └── logger.py             # 로깅 설정
 │   ├── config.py                 # 환경 설정
-│   └── main.py                   # 봇 실행 진입점
+│   ├── main.py                   # 단일 봇 실행 (레거시)
+│   └── main_debate.py            # 멀티 에이전트 Orchestrator
 ├── tests/
 │   ├── test_adk_agent.py         # ADK Agent 테스트
 │   ├── smoke_test.py             # 초기화 검증
@@ -73,14 +86,14 @@ Python 3.11.9 이상이 필요합니다.
 uv sync
 ```
 
-### 3. Slack 앱 3개 생성
+### 3. Slack 앱 생성
 
-**중요**: 3개의 독립적인 Slack 앱이 필요합니다.
+**Orchestrator Mode**: 1개의 Slack 앱만 필요 (모든 에이전트가 하나의 봇으로 실행)
 
-각 에이전트마다 다음 과정을 반복하세요:
+**참고**: 이전 방식(3개 독립 앱)도 여전히 지원되지만, Orchestrator Mode 권장
 
 1. [Slack API](https://api.slack.com/apps)에서 새 앱 생성
-   - App Name: `AgentJamal`, `AgentRyan`, `AgentJames`
+   - App Name: `Multi-Agent Debate` (또는 원하는 이름)
 2. **OAuth & Permissions**에서 다음 권한 추가:
    - `app_mentions:read` - 멘션 이벤트 읽기
    - `chat:write` - 메시지 보내기
@@ -101,122 +114,119 @@ uv sync
 
 ### 5. 환경 변수 설정
 
-샘플 파일을 복사하여 3개의 .env 파일을 생성하세요:
+샘플 파일을 복사하여 .env 파일을 생성하세요:
 
 ```bash
-cp .env.jamal.sample .env.jamal
-cp .env.ryan.sample .env.ryan
-cp .env.james.sample .env.james
+cp .env.jamal.sample .env
 ```
 
-각 파일을 열어 다음 값들을 입력하세요:
+.env 파일을 열어 다음 값들을 입력하세요:
 
-**.env.jamal** (AgentJamal - Proposer):
-- `SLACK_BOT_TOKEN`: AgentJamal의 Bot User OAuth Token
-- `SLACK_APP_TOKEN`: AgentJamal의 App-Level Token
+- `SLACK_BOT_TOKEN`: Bot User OAuth Token (xoxb-로 시작)
+- `SLACK_APP_TOKEN`: App-Level Token (xapp-로 시작)
 - `GOOGLE_GENAI_API_KEY`: Google AI Studio에서 발급받은 API 키
 
-**.env.ryan** (AgentRyan - Opposer):
-- `SLACK_BOT_TOKEN`: AgentRyan의 Bot User OAuth Token
-- `SLACK_APP_TOKEN`: AgentRyan의 App-Level Token
-- `GOOGLE_GENAI_API_KEY`: 동일한 Google API 키 (3개 봇 공유)
-
-**.env.james** (AgentJames - Mediator):
-- `SLACK_BOT_TOKEN`: AgentJames의 Bot User OAuth Token
-- `SLACK_APP_TOKEN`: AgentJames의 App-Level Token
-- `GOOGLE_GENAI_API_KEY`: 동일한 Google API 키 (3개 봇 공유)
-
-**참고**:
-- 각 봇은 고유한 Slack 토큰이 필요합니다
-- GOOGLE_GENAI_API_KEY는 3개 봇이 동일한 값을 사용합니다
+**레거시 모드 (3개 독립 앱)**:
+필요시 `.env.jamal`, `.env.ryan`, `.env.james` 파일로 각각 실행 가능
 
 ## 실행 방법
 
-### 방법 1: 3개 에이전트 동시 실행 (권장)
+### Orchestrator Mode (권장)
+
+하나의 프로세스에서 모든 에이전트 실행:
 
 ```bash
-# 모든 에이전트 시작
-./run_agents.sh
-
-# 종료하려면 Ctrl+C 또는
-./stop_agents.sh
+uv run python -m src.main_debate
 ```
 
-### 방법 2: 개별 에이전트 실행
+특징:
+- 단일 Slack 앱만 필요
+- 프로그래매틱 토론 흐름 제어
+- 자동 루프 실행 (종료 조건까지)
+- Slack에서 자연스러운 대화 관찰 가능
 
-**AgentJamal 실행:**
+### 레거시 Mode (3개 독립 앱)
+
+개별 프로세스로 각 에이전트 실행:
+
 ```bash
+# 터미널 1
 set -a && source .env.jamal && set +a
 uv run python -m src.main
-```
 
-**AgentRyan 실행:**
-```bash
+# 터미널 2
 set -a && source .env.ryan && set +a
 uv run python -m src.main
-```
 
-**AgentJames 실행:**
-```bash
+# 터미널 3
 set -a && source .env.james && set +a
 uv run python -m src.main
 ```
 
-### 방법 3: 초기화 검증 (smoke test)
+또는 스크립트 사용:
 ```bash
-PYTHONPATH=. uv run python tests/smoke_test.py
+./run_agents.sh  # 시작
+./stop_agents.sh # 종료
 ```
 
 ## 사용 방법
 
-### 토론 시작
+### 토론 시작 (Orchestrator Mode)
 
-Slack에서 아무 에이전트나 멘션하여 토론을 시작하세요:
+Slack에서 봇을 멘션하여 토론을 시작하세요:
 
 ```
-@AgentJamal AI 기술의 미래에 대해 토론해볼까요?
+@Multi-Agent-Debate AI 기술의 미래에 대해 토론해볼까요?
 ```
+
+토론 자동 진행:
+1. **AgentJamal (Proposer)**: 긍정적 주장 제시
+2. **AgentJames (Mediator)**: Jamal의 의견 요약, Ryan에게 전달
+3. **AgentRyan (Opposer)**: 비판적 분석 제시
+4. **AgentJames (Mediator)**: 종료 판단 또는 Jamal에게 재요청
+5. (반복) 종료 조건까지 자동 루프
 
 ### 토론 진행 예시
 
 ```
-사용자: @AgentJamal AI 기술이 일자리를 대체할까요?
+사용자: @Multi-Agent-Debate AI 기술이 일자리를 대체할까요?
 
-AgentJamal (Proposer):
+🤖 [토론 자동 진행]
+
+AgentJamal:
 AI 기술은 새로운 일자리를 창출할 것입니다.
 과거 산업혁명 때도 기계가 일부 일자리를 대체했지만,
 더 많은 새로운 직종이 생겨났습니다.
-@AgentRyan 당신의 의견은 어떤가요?
+@AgentJames
 
-AgentRyan (Opposer):
+AgentJames:
+Jamal님은 AI가 새로운 일자리를 창출할 것이라 보십니다.
+역사적 사례를 근거로 제시하셨네요.
+@AgentRyan 반론 부탁드립니다.
+
+AgentRyan:
 흥미로운 관점이지만, 몇 가지 우려사항이 있습니다.
 AI의 발전 속도는 과거 산업혁명과는 비교할 수 없을 정도로 빠릅니다.
 단기적으로 대량 실업이 발생할 수 있으며...
-@AgentJames 중재를 부탁드립니다.
+@AgentJames
 
-AgentJames (Mediator):
+AgentJames:
+토론을 종료합니다.
+
 두 분의 의견을 종합하면, AI가 일자리에 미치는 영향은
-단기와 장기로 나누어 볼 필요가 있습니다.
-- 단기: 일부 직종에서 대체 발생
+단기와 장기로 나누어 볼 필요가 있습니다:
+- 단기: 일부 직종에서 대체 발생 가능
 - 장기: 새로운 직종 창출 및 생산성 향상
-토론을 종료합니다. [최종 결론 요약]
-```
 
-### 단독 질문
-
-개별 에이전트에게 직접 질문할 수도 있습니다:
-
-```
-@AgentJamal 오늘 서울 날씨 어때?
-@AgentRyan 이 프로젝트의 위험 요소는?
-@AgentJames 두 의견을 종합하면?
+[종료]
 ```
 
 **특징:**
-- 모든 에이전트가 Google Search를 자동으로 사용하여 최신 정보를 제공합니다
-- 동일 스레드 내에서 3개 에이전트가 대화 히스토리를 공유합니다
-- 에이전트 간 자동 멘션으로 자연스러운 토론이 진행됩니다
-- AgentJames가 합의 도달 또는 반복 시 토론을 자동으로 종료합니다
+- 사용자는 첫 멘션만 하면 자동으로 토론 진행
+- Orchestrator가 토론 흐름 제어
+- Slack에서 자연스러운 대화 형태로 관찰 가능
+- AgentJames가 종료 조건 자동 판단
+- 최대 10라운드까지 진행 (설정 변경 가능)
 
 ## 트러블슈팅
 
@@ -279,15 +289,27 @@ uv run pytest tests/unit/test_message_processor.py -v
 
 ## 아키텍처
 
-### 전체 시스템 구조
+### Orchestrator Mode 구조 (권장)
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                         Slack Workspace                       │
-│  User mentions @AgentJamal, @AgentRyan, or @AgentJames       │
-└──────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                      Slack Workspace                      │
+│          User mentions @Multi-Agent-Debate                │
+└──────────────────────────────────────────────────────────┘
                               │
-                              │ Socket Mode (3 connections)
+                              │ Socket Mode (1 connection)
+                              ▼
+                    ┌──────────────────┐
+                    │   SlackBot       │
+                    │   Handler        │
+                    └─────────┬────────┘
+                              │
+                              ▼
+                    ┌──────────────────┐
+                    │ DebateOrchestrator│
+                    │ - Flow control   │
+                    │ - Active debates │
+                    └─────────┬────────┘
                               │
         ┌─────────────────────┼─────────────────────┐
         │                     │                     │
@@ -295,74 +317,48 @@ uv run pytest tests/unit/test_message_processor.py -v
 ┌──────────────┐      ┌──────────────┐      ┌──────────────┐
 │ AgentJamal   │      │ AgentRyan    │      │ AgentJames   │
 │ (Proposer)   │      │ (Opposer)    │      │ (Mediator)   │
-└──────────────┘      └──────────────┘      └──────────────┘
-        │                     │                     │
-        │                     │                     │
-        │     ┌───────────────┴───────────────┐     │
-        └─────┤  Shared Session Registry      ├─────┘
-              │  (FileSessionRegistry)         │
-              │  thread_ts → session_id        │
-              └───────────────┬────────────────┘
-                              │
-                              ▼
-                    ┌──────────────────┐
-                    │   ADK Session    │
-                    │ (Conversation    │
-                    │   History)       │
-                    └──────────────────┘
-                              │
-                              ▼
+│ app_name:    │      │ app_name:    │      │ app_name:    │
+│ debate_jamal │      │ debate_ryan  │      │ debate_james │
+└──────┬───────┘      └──────┬───────┘      └──────┬───────┘
+       │                     │                     │
+       │    Independent Sessions (per thread)     │
+       │                     │                     │
+       ▼                     ▼                     ▼
+┌──────────────┐      ┌──────────────┐      ┌──────────────┐
+│ ADK Session  │      │ ADK Session  │      │ ADK Session  │
+│ (Jamal's     │      │ (Ryan's      │      │ (James's     │
+│  history)    │      │  history)    │      │  history)    │
+└──────┬───────┘      └──────┬───────┘      └──────┬───────┘
+       │                     │                     │
+       └─────────────────────┼─────────────────────┘
+                             ▼
                     ┌──────────────────┐
                     │   Gemini 2.0     │
                     │   + google_search│
                     └──────────────────┘
 ```
 
-### 개별 에이전트 구조
-
-```
-┌─────────────────────────────────────────┐
-│  Single Agent Instance (any role)       │
-│  ┌────────────────────────────────┐    │
-│  │  SlackBot Handler              │    │
-│  │  - Socket Mode listener        │    │
-│  │  - Event routing               │    │
-│  └────────────────────────────────┘    │
-│               │                         │
-│               ▼                         │
-│  ┌────────────────────────────────┐    │
-│  │  MessageProcessor              │    │
-│  │  - Text cleaning               │    │
-│  │  - Context injection           │    │
-│  └────────────────────────────────┘    │
-│               │                         │
-│               ▼                         │
-│  ┌────────────────────────────────┐    │
-│  │  ADKAgent (role-specific)      │    │
-│  │  - Role: proposer/opposer/     │    │
-│  │          mediator               │    │
-│  │  - Shared session access       │    │
-│  │  - Google Search tool          │    │
-│  └────────────────────────────────┘    │
-└─────────────────────────────────────────┘
-```
-
 ### 핵심 특징
 
-1. **공유 세션 레지스트리**
-   - 3개 에이전트가 같은 `session_id` 사용
-   - 파일 기반 (./shared_sessions.json)
-   - fcntl 파일 잠금으로 동시성 보장
+1. **Hybrid Architecture**
+   - Orchestrator가 토론 흐름을 프로그래매틱하게 제어
+   - Visual mentions는 Slack 관찰용 (기능적 트리거 아님)
+   - Active debate tracking으로 이벤트 간섭 방지
 
-2. **ADK 세션 관리**
-   - Google ADK가 대화 히스토리 자동 관리
-   - 별도 DB 불필요
-   - 스레드별 독립적인 컨텍스트
+2. **Independent Session Management**
+   - 각 에이전트가 독립적인 `app_name` 사용
+   - ADK가 에이전트별 세션 자동 관리
+   - Context 공유는 Slack 메시지를 통해 발생
 
-3. **역할 기반 Instruction**
-   - 각 에이전트가 고유한 역할과 말투
-   - agent_roles.py에 중앙 관리
-   - 환경 변수로 역할 선택
+3. **File-Based Agent Structure**
+   - ADK 요구사항: `src/agents/{name}/agent.py`
+   - 각 agent.py가 `root_agent` export
+   - app_name을 파일 위치에서 자동 추론
+
+4. **Debate Flow Control**
+   - 정해진 순서: Jamal → James → Ryan → James
+   - James가 종료 조건 판단
+   - 최대 라운드 제한으로 무한 루프 방지
 
 ## 마이그레이션 히스토리
 
