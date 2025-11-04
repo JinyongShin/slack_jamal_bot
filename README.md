@@ -112,7 +112,11 @@ uv sync
 1. [Slack API](https://api.slack.com/apps)에서 새 앱 생성
    - App Name: `AgentRyan`
 2. **OAuth & Permissions**에서 동일한 권한 추가 (위와 동일)
-3. Socket Mode는 활성화하지 **않아도** 됨 (이벤트 수신은 Jamal만)
+   - `chat:write` - **필수** (메시지 전송용)
+   - 나머지 권한도 동일하게 추가
+3. **Socket Mode는 활성화하지 않아도 됨** ❌
+   - Ryan은 메시지 전송만 하고 이벤트 수신은 안함
+   - Event Subscriptions도 설정 안해도 됨
 4. 앱을 워크스페이스에 설치
    - **Bot User OAuth Token 복사** (xoxb-로 시작) → `SLACK_BOT_TOKEN_RYAN`
 
@@ -121,9 +125,17 @@ uv sync
 1. [Slack API](https://api.slack.com/apps)에서 새 앱 생성
    - App Name: `AgentJames`
 2. **OAuth & Permissions**에서 동일한 권한 추가 (위와 동일)
-3. Socket Mode는 활성화하지 **않아도** 됨 (이벤트 수신은 Jamal만)
+   - `chat:write` - **필수** (메시지 전송용)
+   - 나머지 권한도 동일하게 추가
+3. **Socket Mode는 활성화하지 않아도 됨** ❌
+   - James는 메시지 전송만 하고 이벤트 수신은 안함
+   - Event Subscriptions도 설정 안해도 됨
 4. 앱을 워크스페이스에 설치
    - **Bot User OAuth Token 복사** (xoxb-로 시작) → `SLACK_BOT_TOKEN_JAMES`
+
+**요약**:
+- **Jamal**: Socket Mode ✅ + Event Subscriptions ✅ (토론 트리거)
+- **Ryan/James**: 메시지 전송만 (Socket Mode ❌)
 
 ### 4. Google Generative AI API 키 발급
 
@@ -220,18 +232,21 @@ uv run python -m src.main
 
 ### 토론 시작 (Orchestrator Mode)
 
-Slack에서 **봇을 멘션하면 자동으로 토론이 시작**됩니다:
+Slack에서 **`@AgentJamal`을 멘션하면 자동으로 토론이 시작**됩니다:
 
 ```
-@봇이름 AI 기술의 미래에 대해 토론해볼까요?
+@AgentJamal AI 기술의 미래에 대해 토론해볼까요?
 ```
 
 **중요 사항**:
-- **봇 이름**: `@AgentJamal`, `@AgentRyan`, `@AgentJames` (Slack 앱 생성 시 설정한 이름)
-- **봇 개수**: Orchestrator Mode는 **3개의 독립 봇** 사용
-- **메시지 전송**: 각 에이전트가 자신의 봇 계정으로 메시지 전송
-- **이벤트 수신**: AgentJamal 봇만 Socket Mode로 이벤트 수신
+- **토론 시작**: **`@AgentJamal`만 멘션**하면 토론 시작 (Proposer 역할)
+- **이유**: AgentJamal 앱만 Socket Mode 연결 (이벤트 수신)
+- **메시지 전송**: 토론이 시작되면 3개 봇(@AgentJamal, @AgentRyan, @AgentJames)이 각자 메시지 전송
 - **시각적 효과**: Slack에서 3명이 실제로 대화하는 것처럼 보임
+
+**아키텍처 참고**:
+- Ryan과 James는 Socket Mode 연결 없음 (메시지 전송만)
+- Jamal이 트리거 역할 (토론 시작자)
 
 토론 자동 진행:
 1. **AgentJamal (Proposer)**: 긍정적 주장 제시
@@ -377,14 +392,15 @@ uv run pytest tests/unit/test_message_processor.py -v
 ```
 ┌──────────────────────────────────────────────────────────┐
 │                      Slack Workspace                      │
-│          User mentions @Multi-Agent-Debate                │
+│               User mentions @AgentJamal                   │
 └──────────────────────────────────────────────────────────┘
                               │
-                              │ Socket Mode (1 connection)
+                              │ Socket Mode (Jamal only)
                               ▼
                     ┌──────────────────┐
                     │   SlackBot       │
                     │   Handler        │
+                    │ (Jamal's token)  │
                     └─────────┬────────┘
                               │
                               ▼
@@ -392,6 +408,7 @@ uv run pytest tests/unit/test_message_processor.py -v
                     │ DebateOrchestrator│
                     │ - Flow control   │
                     │ - Active debates │
+                    │ - 3 Slack clients│
                     └─────────┬────────┘
                               │
         ┌─────────────────────┼─────────────────────┐
@@ -399,7 +416,7 @@ uv run pytest tests/unit/test_message_processor.py -v
         ▼                     ▼                     ▼
 ┌──────────────┐      ┌──────────────┐      ┌──────────────┐
 │ AgentJamal   │      │ AgentRyan    │      │ AgentJames   │
-│ (Proposer)   │      │ (Opposer)    │      │ (Mediator)   │
+│ (AI Agent)   │      │ (AI Agent)   │      │ (AI Agent)   │
 │ app_name:    │      │ app_name:    │      │ app_name:    │
 │ debate_jamal │      │ debate_ryan  │      │ debate_james │
 └──────┬───────┘      └──────┬───────┘      └──────┬───────┘
@@ -419,26 +436,48 @@ uv run pytest tests/unit/test_message_processor.py -v
                     │   Gemini 2.0     │
                     │   + google_search│
                     └──────────────────┘
+                             │
+        ┌────────────────────┼────────────────────┐
+        │                    │                    │
+        ▼                    ▼                    ▼
+┌──────────────┐      ┌──────────────┐      ┌──────────────┐
+│ Slack Bot    │      │ Slack Bot    │      │ Slack Bot    │
+│ @AgentJamal  │      │ @AgentRyan   │      │ @AgentJames  │
+│ (Post msgs)  │      │ (Post msgs)  │      │ (Post msgs)  │
+└──────────────┘      └──────────────┘      └──────────────┘
+       │                    │                    │
+       └────────────────────┼────────────────────┘
+                            ▼
+                  ┌────────────────────┐
+                  │  Slack Workspace   │
+                  │ (3 bots chatting)  │
+                  └────────────────────┘
 ```
 
 ### 핵심 특징
 
-1. **Hybrid Architecture**
+1. **3-Bot Visual Architecture** ⭐ NEW
+   - **3개 독립 Slack 봇**: 각 에이전트가 자신의 봇 계정으로 메시지 전송
+   - **이벤트 수신**: AgentJamal만 Socket Mode 연결 (토론 트리거)
+   - **메시지 전송**: 3개 WebClient로 각 봇이 독립적으로 메시지 전송
+   - **시각적 효과**: Slack에서 3명이 실제로 대화하는 것처럼 보임
+
+2. **Hybrid Architecture**
    - Orchestrator가 토론 흐름을 프로그래매틱하게 제어
    - Visual mentions는 Slack 관찰용 (기능적 트리거 아님)
    - Active debate tracking으로 이벤트 간섭 방지
 
-2. **Independent Session Management**
+3. **Independent Session Management**
    - 각 에이전트가 독립적인 `app_name` 사용
    - ADK가 에이전트별 세션 자동 관리
    - Context 공유는 Slack 메시지를 통해 발생
 
-3. **File-Based Agent Structure**
+4. **File-Based Agent Structure**
    - ADK 요구사항: `src/agents/{name}/agent.py`
    - 각 agent.py가 `root_agent` export
    - app_name을 파일 위치에서 자동 추론
 
-4. **Debate Flow Control**
+5. **Debate Flow Control**
    - 정해진 순서: Jamal → James → Ryan → James
    - James가 종료 조건 판단
    - 최대 라운드 제한으로 무한 루프 방지
