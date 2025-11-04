@@ -206,8 +206,9 @@ When building multi-agent debate systems in Slack, use this hybrid approach:
 
 4. **Independent Session Management:**
    - Each agent has unique `app_name` (e.g., "debate_jamal", "debate_ryan", "debate_james")
-   - ADK automatically manages sessions per agent per thread
-   - No manual session_id passing or FileSessionRegistry needed
+   - Each agent creates/retrieves its own session via `session_service`
+   - Session ID must be explicitly passed to `run_async()` (required parameter)
+   - Use get-or-create pattern: `list_sessions()` → reuse or `create_session()` → new
 
 **Example Implementation:**
 ```python
@@ -347,3 +348,75 @@ class DebateOrchestrator:
 - Race conditions could start duplicate debates for same thread
 - Lock ensures atomic check-and-set operations
 - `finally` block ensures cleanup even on errors
+
+### Session Management: Required Explicit Handling
+
+**CRITICAL: session_id is a required parameter**
+
+ADK's `run_async()` method requires `session_id` as a **keyword-only argument**. You cannot rely on automatic session creation.
+
+```python
+# WRONG: Assuming ADK auto-manages sessions
+async for event in runner.run_async(
+    user_id=user_id,
+    # Missing session_id!
+    new_message=...
+)
+# → TypeError: Runner.run_async() missing 1 required keyword-only argument: 'session_id'
+
+# CORRECT: Explicitly create and pass session_id
+session_id = await self._get_or_create_session(thread_ts, user_id)
+async for event in runner.run_async(
+    user_id=user_id,
+    session_id=session_id,  # Required!
+    new_message=...
+)
+```
+
+**SessionService Methods:**
+- `create_session(app_name, user_id, state={})`: Create new session
+- `list_sessions(app_name, user_id)`: List existing sessions for user
+- `get_session(app_name, user_id, session_id)`: Retrieve specific session
+- `delete_session(app_name, user_id, session_id)`: Delete session
+
+**Get-or-Create Pattern for Session Reuse:**
+
+```python
+async def _get_or_create_session(self, thread_ts: str, user_id: str) -> str:
+    """
+    Get existing session or create new one.
+    Reuses sessions to maintain conversation history per thread.
+    """
+    app_name = f"debate_{self.agent_name.lower()}"
+
+    # Try to find existing session
+    try:
+        sessions = await self.runner.session_service.list_sessions(
+            app_name=app_name,
+            user_id=user_id
+        )
+        if sessions:
+            logger.info(f"Reusing session: {sessions[0].id}")
+            return sessions[0].id
+    except Exception as e:
+        logger.warning(f"Error listing sessions: {e}")
+
+    # Create new session if none exists
+    try:
+        session = await self.runner.session_service.create_session(
+            app_name=app_name,
+            user_id=user_id,
+            state={}  # Initial state
+        )
+        logger.info(f"Created new session: {session.id}")
+        return session.id
+    except Exception as e:
+        logger.error(f"Error creating session: {e}")
+        raise
+```
+
+**Why this pattern is important:**
+- Sessions persist conversation history for each agent
+- Reusing sessions allows agents to remember previous interactions
+- Each agent maintains independent session (not shared across agents)
+- Context sharing happens via Orchestrator's context string, not via shared sessions

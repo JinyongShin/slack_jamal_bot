@@ -52,9 +52,9 @@ def test_invalid_role_raises_error():
         ADKAgent(api_key="test_key", role="invalid_role")
 
 
-def test_session_registry_initialized():
-    """Test that session registry is initialized."""
+def test_session_service_accessible():
+    """Test that session service is accessible via runner."""
     from src.llm.adk_agent import ADKAgent
 
     agent = ADKAgent(api_key="test_key", role="proposer")
-    assert agent.session_registry is not None
+    assert agent.runner.session_service is not None
